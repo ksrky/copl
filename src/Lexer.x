@@ -21,11 +21,21 @@ $white+                     ;
 \-                          { \_ -> Tminus }
 \*                          { \_ -> Ttimes }
 \<                          { \_ -> Tlt }
+\=                          { \_ -> Tequal }
 \(                          { \_ -> Tlparen }
 \)                          { \_ -> Trparen }
+\[                          { \_ -> Tlbracket }
+\]                          { \_ -> Trbracket }
+\,                          { \_ -> Tcomma }
+\|\-                        { \_ -> Tvdash}
+\-\>                        { \_ -> Tarrow }
 if                          { \_ -> Tif }
 then                        { \_ -> Tthen }
 else                        { \_ -> Telse }
+let                         { \_ -> Tlet }
+in                          { \_ -> Tin }
+rec                         { \_ -> Trec }
+fun                         { \_ -> Tfun }
 true                        { \_ -> Ttrue }
 false                       { \_ -> Tfalse }
 @ident                      { Ident }
@@ -37,11 +47,21 @@ data Token
     | Tminus
     | Ttimes
     | Tlt
+    | Tequal
     | Tlparen
     | Trparen
+    | Tlbracket
+    | Trbracket
+    | Tcomma
+    | Tvdash
+    | Tarrow
     | Tif
     | Tthen
     | Telse
+    | Tlet
+    | Tin
+    | Trec
+    | Tfun
     | Ttrue
     | Tfalse
     | Ident String
