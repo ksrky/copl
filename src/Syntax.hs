@@ -3,6 +3,9 @@ module Syntax where
 data Val = VInt Int | VBool Bool
     deriving (Eq)
 
+data Res = RVal Val | RError
+    deriving (Eq)
+
 data Exp = I Int | B Bool | Add Exp Exp | Sub Exp Exp | Mul Exp Exp | Less Exp Exp | Ite Exp Exp Exp
     deriving (Eq)
 
@@ -19,6 +22,10 @@ showBool False = "false"
 instance Show Val where
     show (VInt n)  = show n
     show (VBool b) = showBool b
+
+instance Show Res where
+    show (RVal v) = show v
+    show RError   = "error"
 
 instance Show Exp where
     show (I n)       = show n

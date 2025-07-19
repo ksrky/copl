@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
-
 module EvalNatExp where
 
 import           Data.List (intercalate)
@@ -40,57 +38,59 @@ deriveTimes i1 i2 = Derivation (Times i1 i2 (i1 * i2)) "B-Times" []
 deriveLess :: Int -> Int -> Derivation
 deriveLess i1 i2 = Derivation (Lt i1 i2 (i1 < i2)) "B-Lt" []
 
-deriveEvalTo :: Exp -> Derivation
-deriveEvalTo (I i) = Derivation (EvalTo (I i) (VInt i)) "E-Int" []
-deriveEvalTo (B b) = Derivation (EvalTo (B b) (VBool b)) "E-Bool" []
-deriveEvalTo (Add e1 e2) =
-    let p1 = deriveEvalTo e1
-        (EvalTo _ (VInt i1)) = conclusion p1
-        p2 = deriveEvalTo e2
-        (EvalTo _ (VInt i2)) = conclusion p2
-        p3 = derivePlus i1 i2
-        (Plus _ _ i3) = conclusion p3
-    in Derivation (EvalTo (Add e1 e2) (VInt i3)) "E-Plus" [p1, p2, p3]
-deriveEvalTo (Sub e1 e2) =
-    let p1 = deriveEvalTo e1
-        (EvalTo _ (VInt i1)) = conclusion p1
-        p2 = deriveEvalTo e2
-        (EvalTo _ (VInt i2)) = conclusion p2
-        p3 = deriveMinus i1 i2
-        (Minus _ _ i3) = conclusion p3
-    in Derivation (EvalTo (Sub e1 e2) (VInt i3)) "E-Minus" [p1, p2, p3]
-deriveEvalTo (Mul e1 e2) =
-    let p1 = deriveEvalTo e1
-        (EvalTo _ (VInt i1)) = conclusion p1
-        p2 = deriveEvalTo e2
-        (EvalTo _ (VInt i2)) = conclusion p2
-        p3 = deriveTimes i1 i2
-        (Times _ _ i3) = conclusion p3
-    in Derivation (EvalTo (Mul e1 e2) (VInt i3)) "E-Times" [p1, p2, p3]
-deriveEvalTo (Less e1 e2) =
-    let p1 = deriveEvalTo e1
-        (EvalTo _ (VInt i1)) = conclusion p1
-        p2 = deriveEvalTo e2
-        (EvalTo _ (VInt i2)) = conclusion p2
-        p3 = deriveLess i1 i2
-        (Lt _ _ b) = conclusion p3
-    in Derivation (EvalTo (Less e1 e2) (VBool b)) "E-Lt" [p1, p2, p3]
-deriveEvalTo (Ite e1 e2 e3) =
-    let p1 = deriveEvalTo e1
-        (EvalTo _ (VBool b)) = conclusion p1
-     in if b then
-        let p2 = deriveEvalTo e2
-            (EvalTo _ v2) = conclusion p2
-         in Derivation (EvalTo (Ite e1 e2 e3) v2) "E-IfT" [p1, p2]
-        else
-            let p3 = deriveEvalTo e3
-                (EvalTo _ v3) = conclusion p3
-             in Derivation (EvalTo (Ite e1 e2 e3) v3) "E-IfF" [p1, p3]
-
+deriveEvalTo :: Exp -> Maybe Derivation
+deriveEvalTo (I i) = pure $ Derivation (EvalTo (I i) (VInt i)) "E-Int" []
+deriveEvalTo (B b) = pure $ Derivation (EvalTo (B b) (VBool b)) "E-Bool" []
+deriveEvalTo (Add e1 e2)
+    | Just p1 <- deriveEvalTo e1
+    , (EvalTo _ (VInt i1)) <- conclusion p1
+    , Just p2 <- deriveEvalTo e2
+    , (EvalTo _ (VInt i2)) <- conclusion p2
+    , let p3 = derivePlus i1 i2
+    , (Plus _ _ i3) <- conclusion p3
+    = pure $ Derivation (EvalTo (Add e1 e2) (VInt i3)) "E-Plus" [p1, p2, p3]
+deriveEvalTo (Sub e1 e2)
+    | Just p1 <- deriveEvalTo e1
+    , (EvalTo _ (VInt i1)) <- conclusion p1
+    , Just p2 <- deriveEvalTo e2
+    , (EvalTo _ (VInt i2)) <- conclusion p2
+    , let p3 = deriveMinus i1 i2
+    , (Minus _ _ i3) <- conclusion p3
+    = pure $ Derivation (EvalTo (Sub e1 e2) (VInt i3)) "E-Minus" [p1, p2, p3]
+deriveEvalTo (Mul e1 e2)
+    | Just p1 <- deriveEvalTo e1
+    , (EvalTo _ (VInt i1)) <- conclusion p1
+    , Just p2 <- deriveEvalTo e2
+    , (EvalTo _ (VInt i2)) <- conclusion p2
+    , let p3 = deriveTimes i1 i2
+    , (Times _ _ i3) <- conclusion p3
+    = pure $ Derivation (EvalTo (Mul e1 e2) (VInt i3)) "E-Times" [p1, p2, p3]
+deriveEvalTo (Less e1 e2)
+    | Just p1 <- deriveEvalTo e1
+    , (EvalTo _ (VInt i1)) <- conclusion p1
+    , Just p2 <- deriveEvalTo e2
+    , (EvalTo _ (VInt i2)) <- conclusion p2
+    , let p3 = deriveLess i1 i2
+    , (Lt _ _ b) <- conclusion p3
+    = pure $ Derivation (EvalTo (Less e1 e2) (VBool b)) "E-Less" [p1, p2, p3]
+deriveEvalTo (Ite e1 e2 e3)
+    | Just p1 <- deriveEvalTo e1
+    , (EvalTo _ (VBool True)) <- conclusion p1
+    , Just p2 <- deriveEvalTo e2
+    , (EvalTo _ v2) <- conclusion p2
+    = Just $ Derivation (EvalTo (Ite e1 e2 e3) v2) "E-IfT" [p1, p2]
+    | Just p1 <- deriveEvalTo e1
+    , (EvalTo _ (VBool False)) <- conclusion p1
+    , Just p3 <- deriveEvalTo e3
+    , (EvalTo _ v3) <- conclusion p3
+    = Just $ Derivation (EvalTo (Ite e1 e2 e3) v3) "E-IfF" [p1, p3]
+deriveEvalTo _ = Nothing
 
 main :: IO ()
 main = do
     s <- getContents
     let e = parse (alexScanTokens s)
     let derivationTree = deriveEvalTo e
-    print derivationTree
+    case derivationTree of
+        Nothing -> putStrLn "No valid derivation found."
+        Just d  -> print d
