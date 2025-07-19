@@ -27,10 +27,6 @@ num             { Number $$ }
 %left '*'
 
 %%
-
-Query :: { (Exp, Nat) }
-    : Exp 'evalto' Nat                      { ($1, $3) }
-
 Exp :: { Exp }
     : Exp '+' Exp                           { Add $1 $3 }
     | Exp '*' Exp                           { Mul $1 $3 }

@@ -17,13 +17,12 @@ tokens :-
 
 $white+                     ;
 \+                          { \_ -> Tplus }
-\-                          { \_ -> Tminus }
 \*                          { \_ -> Ttimes }
 \(                          { \_ -> Tlparen }
 \)                          { \_ -> Trparen }
 Z                           { \_ -> TZ }
 S                           { \_ -> TS }
-evalto                      { \_ -> Tevalto }
+\-\*\-\>                    { \_ -> Tevalto }
 @ident                      { Ident }
 @decimal                    { Number . read }
 

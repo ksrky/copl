@@ -1,12 +1,15 @@
 module Syntax where
 
 data Nat = Z | S Nat
+    deriving (Eq)
 
 data Exp = N Nat | Add Exp Exp | Mul Exp Exp
+    deriving (Eq)
 
-data Judgement = EvalTo Exp Nat
-               | Plus Nat Nat Nat
+data Judgement = Plus Nat Nat Nat
                | Times Nat Nat Nat
+               | Step Exp Exp
+               | MultiStep Exp Exp
 
 instance Show Nat where
     show Z     = "Z"
@@ -18,6 +21,7 @@ instance Show Exp where
     show (Mul e1 e2) = "(" ++ show e1 ++ " * " ++ show e2 ++ ")"
 
 instance Show Judgement where
-    show (EvalTo e n)     = show e ++ " evalto " ++ show n
-    show (Plus n1 n2 n3)  = show n1 ++ " plus " ++ show n2 ++ " is " ++ show n3
+    show (Plus n1 n2 n3) = show n1 ++ " plus " ++ show n2 ++ " is " ++ show n3
     show (Times n1 n2 n3) = show n1 ++ " times " ++ show n2 ++ " is " ++ show n3
+    show (Step e1 e2) = show e1 ++ " --> " ++ show e2
+    show (MultiStep e1 e2) = show e1 ++ " -*-> " ++ show e2

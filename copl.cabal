@@ -28,7 +28,6 @@ library
       EvalNatExp
       Lexer
       Parser
-      ReduceNatExp
       Syntax
   other-modules:
       Paths_copl
