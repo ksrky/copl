@@ -3,13 +3,13 @@ module Syntax where
 data Val = VInt Int | VBool Bool
     deriving (Eq)
 
-data Res = RVal Val | RError
+data Res = RV Val | RError
     deriving (Eq)
 
 data Exp = I Int | B Bool | Add Exp Exp | Sub Exp Exp | Mul Exp Exp | Less Exp Exp | Ite Exp Exp Exp
     deriving (Eq)
 
-data Judgement = EvalTo Exp Val
+data Judgement = EvalTo Exp Res
                | Plus Int Int Int
                | Minus Int Int Int
                | Times Int Int Int
@@ -24,8 +24,8 @@ instance Show Val where
     show (VBool b) = showBool b
 
 instance Show Res where
-    show (RVal v) = show v
-    show RError   = "error"
+    show (RV v) = show v
+    show RError = "error"
 
 instance Show Exp where
     show (I n)       = show n
@@ -37,7 +37,7 @@ instance Show Exp where
     show (Ite e1 e2 e3) = "if " ++ show e1 ++ " then " ++ show e2 ++ " else " ++ show e3
 
 instance Show Judgement where
-    show (EvalTo e n)     = show e ++ " evalto " ++ show n
+    show (EvalTo e r)     = show e ++ " evalto " ++ show r
     show (Plus n1 n2 n3)  = show n1 ++ " plus " ++ show n2 ++ " is " ++ show n3
     show (Minus n1 n2 n3) = show n1 ++ " minus " ++ show n2 ++ " is " ++ show n3
     show (Times n1 n2 n3) = show n1 ++ " times " ++ show n2 ++ " is " ++ show n3
