@@ -12,6 +12,7 @@ $alpha = [a-zA-Z]
 
 @decimal = $digit+
 @ident = $alpha [$alpha $digit \_ \']*
+@int = \-? $digit+
 
 tokens :-
 
@@ -19,27 +20,31 @@ $white+                     ;
 \+                          { \_ -> Tplus }
 \-                          { \_ -> Tminus }
 \*                          { \_ -> Ttimes }
+\<                          { \_ -> Tlt }
 \(                          { \_ -> Tlparen }
 \)                          { \_ -> Trparen }
-Z                           { \_ -> TZ }
-S                           { \_ -> TS }
-evalto                      { \_ -> Tevalto }
+if                          { \_ -> Tif }
+then                        { \_ -> Tthen }
+else                        { \_ -> Telse }
+true                        { \_ -> Ttrue }
+false                       { \_ -> Tfalse }
 @ident                      { Ident }
-@decimal                    { Number . read }
+@int                        { Number . read }
 
 {
 data Token
     = Tplus
     | Tminus
     | Ttimes
-    | Tequal
+    | Tlt
     | Tlparen
     | Trparen
-    | TZ
-    | TS
-    | Tevalto
-    | Tby
+    | Tif
+    | Tthen
+    | Telse
+    | Ttrue
+    | Tfalse
     | Ident String
-    | Number Integer
+    | Number Int
     deriving (Eq, Show)
 }

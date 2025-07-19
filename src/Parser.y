@@ -14,32 +14,34 @@ import Syntax
 '+'             { Tplus }
 '-'             { Tminus }   
 '*'             { Ttimes }
+'<'             { Tlt }
 '('             { Tlparen }
 ')'             { Trparen }
-'Z'             { TZ }
-'S'             { TS }
-'evalto'        { Tevalto }
+'if'            { Tif }
+'then'          { Tthen }
+'else'          { Telse }
+'true'          { Ttrue }
+'false'         { Tfalse }
 
 ident           { Ident $$ }
 num             { Number $$ }
 
+%nonassoc '<'
 %left '+' '-'
 %left '*'
 
 %%
 
-Query :: { (Exp, Nat) }
-    : Exp 'evalto' Nat                      { ($1, $3) }
-
 Exp :: { Exp }
     : Exp '+' Exp                           { Add $1 $3 }
+    | Exp '-' Exp                           { Sub $1 $3 }
     | Exp '*' Exp                           { Mul $1 $3 }
-    | Nat                                   { N $1 }
+    | Exp '<' Exp                           { Less $1 $3 }
+    | num                                   { I $1 }
+    | 'if' Exp 'then' Exp 'else' Exp        { Ite $2 $4 $6 }
+    | 'true'                                { B True }
+    | 'false'                               { B False }
     | '(' Exp ')'                           { $2 }
-
-Nat :: { Nat }
-    : 'Z'                                   { Z }
-    | 'S' '(' Nat ')'                       { S $3 }
 {
 parseError :: [Token] -> a
 parseError ts = error $ "Parse error: " ++ show ts

@@ -1,1 +1,1 @@
-Z * (S(S(Z)) + S(S(Z))) evalto Z
+3 + (if -23 < -2 * 8 then 8 else 2) + 4

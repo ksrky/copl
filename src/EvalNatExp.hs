@@ -2,7 +2,7 @@
 
 module EvalNatExp where
 
-import Data.List (intercalate)
+import           Data.List (intercalate)
 
 import           Lexer
 import           Parser
@@ -28,104 +28,69 @@ instance Show Derivation where
                         intercalate ";\n" premiseStrings ++ "\n" ++
                         spaces ++ "}"
 
-derivePlus :: Nat -> Nat -> Derivation
-derivePlus Z n2 = Derivation (Plus Z n2 n2) "P-Zero" []
-derivePlus (S n1) n2 =
-    let p = derivePlus n1 n2
-        (Plus _ _ n) = conclusion p
-    in Derivation (Plus (S n1) n2 (S n)) "P-Succ" [p]
+derivePlus :: Int -> Int -> Derivation
+derivePlus i1 i2 = Derivation (Plus i1 i2 (i1 + i2)) "B-Plus" []
 
-deriveTimes :: Nat -> Nat -> Derivation
-deriveTimes Z n2 = Derivation (Times Z n2 Z) "T-Zero" []
-deriveTimes (S n1) n2 =
-    let p1 = deriveTimes n1 n2
-        (Times _ _ n3) = conclusion p1
-        p2 = derivePlus n2 n3
-        (Plus _ _ n4) = conclusion p2
-    in Derivation (Times (S n1) n2 n4) "T-Succ" [p1, p2]
+deriveMinus :: Int -> Int -> Derivation
+deriveMinus i1 i2 = Derivation (Minus i1 i2 (i1 - i2)) "B-Minus" []
+
+deriveTimes :: Int -> Int -> Derivation
+deriveTimes i1 i2 = Derivation (Times i1 i2 (i1 * i2)) "B-Times" []
+
+deriveLess :: Int -> Int -> Derivation
+deriveLess i1 i2 = Derivation (Lt i1 i2 (i1 < i2)) "B-Lt" []
 
 deriveEvalTo :: Exp -> Derivation
-deriveEvalTo (N n) = Derivation (EvalTo (N n) n) "E-Const" []
+deriveEvalTo (I i) = Derivation (EvalTo (I i) (VInt i)) "E-Int" []
+deriveEvalTo (B b) = Derivation (EvalTo (B b) (VBool b)) "E-Bool" []
 deriveEvalTo (Add e1 e2) =
     let p1 = deriveEvalTo e1
-        (EvalTo _ n1) = conclusion p1
+        (EvalTo _ (VInt i1)) = conclusion p1
         p2 = deriveEvalTo e2
-        (EvalTo _ n2) = conclusion p2
-        p3 = derivePlus n1 n2
-        (Plus _ _ n) = conclusion p3
-    in Derivation (EvalTo (Add e1 e2) n) "E-Plus" [p1, p2, p3]
+        (EvalTo _ (VInt i2)) = conclusion p2
+        p3 = derivePlus i1 i2
+        (Plus _ _ i3) = conclusion p3
+    in Derivation (EvalTo (Add e1 e2) (VInt i3)) "E-Plus" [p1, p2, p3]
+deriveEvalTo (Sub e1 e2) =
+    let p1 = deriveEvalTo e1
+        (EvalTo _ (VInt i1)) = conclusion p1
+        p2 = deriveEvalTo e2
+        (EvalTo _ (VInt i2)) = conclusion p2
+        p3 = deriveMinus i1 i2
+        (Minus _ _ i3) = conclusion p3
+    in Derivation (EvalTo (Sub e1 e2) (VInt i3)) "E-Minus" [p1, p2, p3]
 deriveEvalTo (Mul e1 e2) =
     let p1 = deriveEvalTo e1
-        (EvalTo _ n1) = conclusion p1
+        (EvalTo _ (VInt i1)) = conclusion p1
         p2 = deriveEvalTo e2
-        (EvalTo _ n2) = conclusion p2
-        p3 = deriveTimes n1 n2
-        (Times _ _ n) = conclusion p3
-    in Derivation (EvalTo (Mul e1 e2) n) "E-Times" [p1, p2, p3]
+        (EvalTo _ (VInt i2)) = conclusion p2
+        p3 = deriveTimes i1 i2
+        (Times _ _ i3) = conclusion p3
+    in Derivation (EvalTo (Mul e1 e2) (VInt i3)) "E-Times" [p1, p2, p3]
+deriveEvalTo (Less e1 e2) =
+    let p1 = deriveEvalTo e1
+        (EvalTo _ (VInt i1)) = conclusion p1
+        p2 = deriveEvalTo e2
+        (EvalTo _ (VInt i2)) = conclusion p2
+        p3 = deriveLess i1 i2
+        (Lt _ _ b) = conclusion p3
+    in Derivation (EvalTo (Less e1 e2) (VBool b)) "E-Lt" [p1, p2, p3]
+deriveEvalTo (Ite e1 e2 e3) =
+    let p1 = deriveEvalTo e1
+        (EvalTo _ (VBool b)) = conclusion p1
+     in if b then
+        let p2 = deriveEvalTo e2
+            (EvalTo _ v2) = conclusion p2
+         in Derivation (EvalTo (Ite e1 e2 e3) v2) "E-IfT" [p1, p2]
+        else
+            let p3 = deriveEvalTo e3
+                (EvalTo _ v3) = conclusion p3
+             in Derivation (EvalTo (Ite e1 e2 e3) v3) "E-IfF" [p1, p3]
+
 
 main :: IO ()
 main = do
     s <- getContents
-    let (exp, nat) = parse (alexScanTokens s)
-    let derivationTree = deriveEvalTo exp
+    let e = parse (alexScanTokens s)
+    let derivationTree = deriveEvalTo e
     print derivationTree
-
-{-data Nat
-    = Z
-    | S Nat
-    deriving (Eq)
-
-instance Show Nat where
-    show Z     = "Z"
-    show (S n) = "S(" ++ show n ++ ")"
-
-data Exp
-    = Const Nat
-    | Plus Exp Exp
-    | Times Exp Exp
-    deriving (Eq)
-
-instance Show Exp where
-    show (Const n)     = show n
-    show (Plus e1 e2)  = "(" ++ show e1 ++ " + " ++ show e2 ++ ")"
-    show (Times e1 e2) = "(" ++ show e1 ++ " * " ++ show e2 ++ ")"
-
-data NatRules
-    = PZero Nat
-    | PSucc Nat Nat Nat NatRules
-    | TZero Nat
-    | TSucc Nat Nat Nat NatRules
-    deriving (Eq)
-
-instance Show NatRules where
-    show (PZero n) = "Z plus " ++ show n ++ " is " ++ show n ++ " by P-Zero {}"
-    show (PSucc n1 n2 n r) =
-        "S(" ++ show n1 ++ ") plus " ++ show n2 ++ " is S(" ++ show n ++ ") by P-Succ {" ++ show r ++ "}"
-    show (TZero n) = "Z times " ++ show n ++ " is Z by T-Zero {}"
-    show (TSucc n1 n2 n4 r) =
-        "S(" ++ show n1 ++ ") times " ++ show n2 ++ " is " ++ show n4 ++ "by T-Succ {" ++ show r ++ "}"
-
-data ExpRules
-    = EConst Nat
-    | EAdd Exp Exp Nat ExpRules ExpRules NatRules
-    | EMul Exp Exp Nat ExpRules ExpRules NatRules
-    deriving (Eq)
-
-instance Show ExpRules where
-    show (EConst n) = show n ++ " evalto " ++ show n ++ " by E-Const {}"
-    show (EAdd e1 e2 n r1 r2 r3) =
-        show e1 ++ "+" ++ show e2 ++ " evalto " ++ show n ++ " by E-Plus {" ++ show r1 ++ ";" ++ show r2 ++ ";" ++ show r3 ++ "}"
-    show (EMul e1 e2 n r1 r2 r3) =
-        show e1 ++ "*" ++ show e2 ++ " evalto " ++ show n ++ " by E-Mul {" ++ show r1 ++ ";" ++ show r2 ++ ";" ++ show r3 ++ "}"
-
-evalNat :: Nat -> NatRules
-
-eval :: Exp -> ExpRules
-eval (Const n) = EConst n
-eval (Plus e1 e2)  =
-    let (s1, n1) = eval e1
-        (s2, n2) = eval e2
-     in ()
-eval (Times e1 e2)  =
-    let (s1, n1) = eval e1
-     in undefined-}
