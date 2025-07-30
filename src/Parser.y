@@ -50,17 +50,8 @@ Env :: { Env }
     | Env1                                  { $1 }
 
 Env1 :: { Env }
-    : ident '=' Val                         { Snoc Empty $1 $3 }
-    | Env1 ',' ident '=' Val                { Snoc $1 $3 $5 }
-
-Val :: { Val }
-    : num                                   { VInt $1 }
-    | 'true'                                { VBool True }
-    | 'false'                               { VBool False }
-    | '(' Env ')' '[' 'fun' ident '=' Exp ']'
-                                            { VClos $2 $6 $8 }
-    | '(' Env ')' '[' 'rec' ident '=' 'fun' ident '=' Exp ']'
-                                            { VFix $2 $6 $9 $11 }
+    : ident                         { Snoc Empty $1 }
+    | Env1 ',' ident                { Snoc $1 $3 }
 
 Exp :: { Exp }
     : Exp '+' Exp                           { Add $1 $3 }
