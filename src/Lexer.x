@@ -27,8 +27,10 @@ $white+                     ;
 \[                          { \_ -> Tlbracket }
 \]                          { \_ -> Trbracket }
 \,                          { \_ -> Tcomma }
+\.                          { \_ -> Tdot }
 \|\-                        { \_ -> Tvdash}
 \-\>                        { \_ -> Tarrow }
+\#                          { \_ -> Tsharp }
 if                          { \_ -> Tif }
 then                        { \_ -> Tthen }
 else                        { \_ -> Telse }
@@ -53,8 +55,10 @@ data Token
     | Tlbracket
     | Trbracket
     | Tcomma
+    | Tdot
     | Tvdash
     | Tarrow
+    | Tsharp
     | Tif
     | Tthen
     | Telse

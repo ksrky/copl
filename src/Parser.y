@@ -21,8 +21,10 @@ import Syntax
 '['             { Tlbracket }
 ']'             { Trbracket }
 ','             { Tcomma }
+'.'             { Tdot }
 '|-'            { Tvdash }
 '->'            { Tarrow }
+'#'             { Tsharp }
 'if'            { Tif }
 'then'          { Tthen }
 'else'          { Telse }
@@ -50,17 +52,17 @@ Env :: { Env }
     | Env1                                  { $1 }
 
 Env1 :: { Env }
-    : ident '=' Val                         { Snoc Empty $1 $3 }
-    | Env1 ',' ident '=' Val                { Snoc $1 $3 $5 }
+    : Val                         { Snoc Empty $1 }
+    | Env1 ',' Val                { Snoc $1 $3 }
 
 Val :: { Val }
     : num                                   { VInt $1 }
     | 'true'                                { VBool True }
     | 'false'                               { VBool False }
-    | '(' Env ')' '[' 'fun' ident '=' Exp ']'
-                                            { VClos $2 $6 $8 }
-    | '(' Env ')' '[' 'rec' ident '=' 'fun' ident '=' Exp ']'
-                                            { VFix $2 $6 $9 $11 }
+    | '(' Env ')' '[' 'fun' '.' '=' Exp ']'
+                                            { VClos $2 $8 }
+    | '(' Env ')' '[' 'rec' '.' '=' 'fun' '.' '=' Exp ']'
+                                            { VFix $2 $11 }
 
 Exp :: { Exp }
     : Exp '+' Exp                           { Add $1 $3 }
@@ -68,10 +70,10 @@ Exp :: { Exp }
     | Exp '*' Exp                           { Mul $1 $3 }
     | Exp '<' Exp                           { Less $1 $3 }
     | 'if' Exp 'then' Exp 'else' Exp        { Ite $2 $4 $6 }
-    | 'let' ident '=' Exp 'in' Exp          { Let $2 $4 $6 }
-    | 'fun' ident '->' Exp                  { Fun $2 $4 }
-    | 'let' 'rec' ident '=' 'fun' ident '->' Exp 'in' Exp
-                                            { Letrec $3 $6 $8 $10 }
+    | 'let' '.' '=' Exp 'in' Exp          { Let $4 $6 }
+    | 'fun' '.' '->' Exp                  { Fun $4 }
+    | 'let' 'rec' '.' '=' 'fun' '.' '->' Exp 'in' Exp
+                                            { Letrec $8 $10 }
     | Exp2                                  { $1 }
 
 Exp2 :: { Exp }
@@ -82,7 +84,7 @@ Exp1 :: { Exp }
     : num                                   { I $1 }
     | 'true'                                { B True }
     | 'false'                               { B False }
-    | ident                                 { V $1 }
+    | '#' num                                 { V $2 }
     | '(' Exp ')'                           { $2 }
 {
 parseError :: [Token] -> a

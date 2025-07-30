@@ -38,14 +38,17 @@ deriveTimes i1 i2 = Derivation (Times i1 i2 (i1 * i2)) "B-Times" []
 deriveLess :: Int -> Int -> Derivation
 deriveLess i1 i2 = Derivation (Lt i1 i2 (i1 < i2)) "B-Lt" []
 
+nth :: Env -> Idx -> Maybe Val
+nth Empty _        = Nothing
+nth (Snoc _ v) 1   = Just v
+nth (Snoc env _) n = nth env (n - 1)
+
 deriveEvalTo :: Env -> Exp -> Maybe Derivation
 deriveEvalTo env (I i) = pure $ Derivation (EvalTo env (I i) (VInt i)) "E-Int" []
 deriveEvalTo env (B b) = pure $ Derivation (EvalTo env (B b) (VBool b)) "E-Bool" []
-deriveEvalTo (Snoc env y v) (V x)
-    | x == y = pure $ Derivation (EvalTo (Snoc env y v) (V x) v) "E-Var1" []
-    | Just p <- deriveEvalTo env (V x)
-    , (EvalTo _ _ v') <- conclusion p
-    = pure $ Derivation (EvalTo (Snoc env y v) (V x) v') "E-Var2" [p]
+deriveEvalTo env (V i)
+    | Just v <- nth env i
+    = pure $ Derivation (EvalTo env (V i) v) "E-Var" []
 deriveEvalTo env (Add e1 e2)
     | Just p1 <- deriveEvalTo env e1
     , (EvalTo _ _ (VInt i1)) <- conclusion p1
@@ -89,38 +92,38 @@ deriveEvalTo env (Ite e1 e2 e3)
     , Just p3 <- deriveEvalTo env e3
     , (EvalTo _ _ v3) <- conclusion p3
     = Just $ Derivation (EvalTo env (Ite e1 e2 e3) v3) "E-IfF" [p1, p3]
-deriveEvalTo env (Let x e1 e2)
+deriveEvalTo env (Let e1 e2)
     | Just p1 <- deriveEvalTo env e1
     , (EvalTo _ _ v1) <- conclusion p1
-    , let env' = Snoc env x v1
+    , let env' = Snoc env v1
     , Just p2 <- deriveEvalTo env' e2
     , (EvalTo _ _ v2) <- conclusion p2
-    = Just $ Derivation (EvalTo env (Let x e1 e2) v2) "E-Let" [p1, p2]
-deriveEvalTo env (Fun x e) =
-    Just $ Derivation (EvalTo env (Fun x e) (VClos env x e)) "E-Fun" []
+    = Just $ Derivation (EvalTo env (Let e1 e2) v2) "E-Let" [p1, p2]
+deriveEvalTo env (Fun e) =
+    Just $ Derivation (EvalTo env (Fun e) (VClos env e)) "E-Fun" []
 deriveEvalTo env (App e1 e2)
     | Just p1 <- deriveEvalTo env e1
-    , (EvalTo _ _ (VFix env0 f x e0)) <- conclusion p1
+    , (EvalTo _ _ (VFix env0 e0)) <- conclusion p1
     , Just p2 <- deriveEvalTo env e2
     , (EvalTo _ _ v2) <- conclusion p2
-    , let env' = Snoc (Snoc env0 f (VFix env0 f x e0)) x v2
+    , let env' = Snoc (Snoc env0 (VFix env0 e0)) v2
     , Just p3 <- deriveEvalTo env' e0
     , (EvalTo _ _ v3) <- conclusion p3
     = Just $ Derivation (EvalTo env (App e1 e2) v3) "E-AppRec" [p1, p2, p3]
 deriveEvalTo env (App e1 e2)
     | Just p1 <- deriveEvalTo env e1
-    , (EvalTo _ _ (VClos env0 x e)) <- conclusion p1
+    , (EvalTo _ _ (VClos env0 e)) <- conclusion p1
     , Just p2 <- deriveEvalTo env e2
     , (EvalTo _ _ v2) <- conclusion p2
-    , let env' = Snoc env0 x v2
+    , let env' = Snoc env0 v2
     , Just p3 <- deriveEvalTo env' e
     , (EvalTo _ _ v3) <- conclusion p3
     = Just $ Derivation (EvalTo env (App e1 e2) v3) "E-App" [p1, p2, p3]
-deriveEvalTo env (Letrec f x e1 e2)
-    | let env' = Snoc env f (VFix env f x e1)
+deriveEvalTo env (Letrec e1 e2)
+    | let env' = Snoc env (VFix env e1)
     , Just p2 <- deriveEvalTo env' e2
     , (EvalTo _ _ v2) <- conclusion p2
-    = Just $ Derivation (EvalTo env (Letrec f x e1 e2) v2) "E-LetRec" [p2]
+    = Just $ Derivation (EvalTo env (Letrec e1 e2) v2) "E-LetRec" [p2]
 deriveEvalTo _ _ = Nothing
 
 main :: IO ()
