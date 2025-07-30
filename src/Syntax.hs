@@ -24,7 +24,19 @@ data Exp
     | Letrec String String Exp Exp
     | Nil
     | Cons Exp Exp
-    | Match Exp Exp String String Exp
+    | Match Exp Clauses
+    deriving (Eq)
+
+data Pat
+    = PVar String
+    | PNil
+    | PCons Pat Pat
+    | PWild
+    deriving (Eq)
+
+data Clauses
+    = Clause Pat Exp
+    | Clauses Pat Exp Clauses
     deriving (Eq)
 
 data Env
@@ -37,6 +49,8 @@ data Judgement = EvalTo Env Exp Val
                | Minus Int Int Int
                | Times Int Int Int
                | Lt Int Int Bool
+               | Matches Pat Val Env
+               | MatchFail Pat Val
 
 showBool :: Bool -> String
 showBool True  = "true"
@@ -65,7 +79,17 @@ instance Show Exp where
     show (Letrec f x e1 e2) = "let rec " ++ f ++ " = fun " ++ x ++ " -> " ++ show e1 ++ " in " ++ show e2
     show Nil = "[]"
     show (Cons e1 e2) = "(" ++ show e1 ++ " :: " ++ show e2 ++ ")"
-    show (Match e1 e2 x y e3) = "(match " ++ show e1 ++ " with [] -> " ++ show e2 ++ " | " ++ x ++ " :: " ++ y ++ " -> " ++ show e3 ++ ")"
+    show (Match e cls) = "(match " ++ show e ++ " with " ++ show cls ++ ")"
+
+instance Show Pat where
+    show (PVar x)      = x
+    show PNil          = "[]"
+    show (PCons p1 p2) = "(" ++ show p1 ++ " :: " ++ show p2 ++ ")"
+    show PWild         = "_"
+
+instance Show Clauses where
+    show (Clause p e)      = show p ++ " -> " ++ show e
+    show (Clauses p e cls) = show p ++ " -> " ++ show e ++ " | " ++ show cls
 
 instance Show Env where
     show Empty            = ""
@@ -78,3 +102,5 @@ instance Show Judgement where
     show (Minus n1 n2 n3) = show n1 ++ " minus " ++ show n2 ++ " is " ++ show n3
     show (Times n1 n2 n3) = show n1 ++ " times " ++ show n2 ++ " is " ++ show n3
     show (Lt n1 n2 b)     = show n1 ++ " less than " ++ show n2 ++ " is " ++ showBool b
+    show (Matches p v env) = show p ++ " matches " ++ show v ++ " when " ++ "(" ++ show env ++ ")"
+    show (MatchFail p v) = show p ++ " doesn't match " ++ show v

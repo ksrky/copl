@@ -44,6 +44,10 @@ find (Snoc env x v) y
     | x == y = Just v
     | otherwise = find env y
 
+compose :: Env -> Env -> Env
+compose env1 Empty           = env1
+compose env1 (Snoc env2 x v) = Snoc (compose env1 env2) x v
+
 deriveEvalTo :: Env -> Exp -> Maybe Derivation
 deriveEvalTo env (I i) = pure $ Derivation (EvalTo env (I i) (VInt i)) "E-Int" []
 deriveEvalTo env (B b) = pure $ Derivation (EvalTo env (B b) (VBool b)) "E-Bool" []
@@ -131,19 +135,55 @@ deriveEvalTo env (Cons e1 e2)
     , Just p2 <- deriveEvalTo env e2
     , (EvalTo _ _ v2) <- conclusion p2
     = Just $ Derivation (EvalTo env (Cons e1 e2) (VCons v1 v2)) "E-Cons" [p1, p2]
-deriveEvalTo env (Match e1 e2 x y e3)
-    | Just p1 <- deriveEvalTo env e1
-    , (EvalTo _ _ VNil) <- conclusion p1
-    , Just p2 <- deriveEvalTo env e2
-    , (EvalTo _ _ v2) <- conclusion p2
-    = Just $ Derivation (EvalTo env (Match e1 e2 x y e3) v2) "E-MatchNil" [p1, p2]
-    | Just p1 <- deriveEvalTo env e1
-    , (EvalTo _ _ (VCons v1 v2)) <- conclusion p1
-    , let env' = Snoc (Snoc env x v1) y v2
-    , Just p3 <- deriveEvalTo env' e3
-    , (EvalTo _ _ v3) <- conclusion p3
-    = Just $ Derivation (EvalTo env (Match e1 e2 x y e3) v3) "E-MatchCons" [p1, p3]
+deriveEvalTo env (Match e (Clause p e1))
+    | Just d1 <- deriveEvalTo env e
+    , (EvalTo _ _ v) <- conclusion d1
+    , Just d2 <- deriveMatch p v
+    , (Matches _ _ env1) <- conclusion d2
+    , let env' = compose env env1
+    , Just d3 <- deriveEvalTo env' e1
+    , (EvalTo _ _ v1) <- conclusion d3
+    = Just $ Derivation (EvalTo env (Match e (Clause p e1)) v1) "E-MatchM1" [d1, d2, d3]
+deriveEvalTo env (Match e (Clauses p e1 cls))
+    | Just d1 <- deriveEvalTo env e
+    , (EvalTo _ _ v) <- conclusion d1
+    , Just d2 <- deriveMatch p v
+    , (Matches _ _ env1) <- conclusion d2
+    , let env' = compose env env1
+    , Just d3 <- deriveEvalTo env' e1
+    , (EvalTo _ _ v1) <- conclusion d3
+    = Just $ Derivation (EvalTo env (Match e (Clauses p e1 cls)) v1) "E-MatchM2" [d1, d2, d3]
+deriveEvalTo env (Match e (Clauses p e1 cls))
+    | Just d1 <- deriveEvalTo env e
+    , (EvalTo _ _ v) <- conclusion d1
+    , Just d2 <- deriveMatch p v
+    , MatchFail _ _ <- conclusion d2
+    , Just d3 <- deriveEvalTo env (Match e cls)
+    , (EvalTo _ _ v1) <- conclusion d3
+    = Just $ Derivation (EvalTo env (Match e (Clauses p e1 cls)) v1) "E-MatchN" [d1, d2, d3]
 deriveEvalTo _ _ = Nothing
+
+deriveMatch :: Pat -> Val -> Maybe Derivation
+deriveMatch (PVar x) v
+    = Just $ Derivation (Matches (PVar x) v (Snoc Empty x v)) "M-Var" []
+deriveMatch PNil VNil
+    = Just $ Derivation (Matches PNil VNil Empty) "M-Nil" []
+deriveMatch (PCons p1 p2) (VCons v1 v2)
+    | Just d1 <- deriveMatch p1 v1
+    , (Matches _ _ env1) <- conclusion d1
+    , Just d2 <- deriveMatch p2 v2
+    , (Matches _ _ env2) <- conclusion d2
+    = Just $ Derivation (Matches (PCons p1 p2) (VCons v1 v2) (compose env1 env2)) "M-Cons" [d1, d2]
+    | Just d <- deriveMatch p1 v1
+    , MatchFail _ _ <- conclusion d
+    = Just $ Derivation (MatchFail (PCons p1 p2) (VCons v1 v2)) "NM-ConsConsL" [d]
+    | Just d <- deriveMatch p2 v2
+    , MatchFail _ _ <- conclusion d
+    = Just $ Derivation (MatchFail (PCons p1 p2) (VCons v1 v2)) "NM-ConsConsR" [d]
+deriveMatch PWild v = Just $ Derivation (Matches PWild v Empty) "M-Wild" []
+deriveMatch p@PCons{} VNil = Just $ Derivation (MatchFail p VNil) "NM-NilCons" []
+deriveMatch PNil v@VCons{} = Just $ Derivation (MatchFail PNil v) "NM-ConsNil" []
+deriveMatch _ _ = Nothing
 
 main :: IO ()
 main = do

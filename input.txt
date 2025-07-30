@@ -1,4 +1,5 @@
-|- let rec max = fun l -> match l with 
-       x :: [] -> x 
-     | x :: y :: z -> if x < y then max (y :: z) else max (x :: z) in
-   max (9 :: 2 :: 3 :: [])
+|- let rec heads = fun l -> match l with
+       [] -> []
+     | [] :: l' -> heads l'
+     | (x :: _) :: l' -> x :: heads l' in
+   heads ((1 :: 2 :: []) :: [] :: (3 :: []) :: [])

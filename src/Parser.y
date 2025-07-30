@@ -25,6 +25,7 @@ import Syntax
 '->'            { Tarrow }
 '::'            { Tcoloncolon }
 '|'             { Tpipe }
+'_'             { Twild }
 'if'            { Tif }
 'then'          { Tthen }
 'else'          { Telse }
@@ -78,8 +79,8 @@ Exp :: { Exp }
     | 'fun' ident '->' Exp                  { Fun $2 $4 }
     | 'let' 'rec' ident '=' 'fun' ident '->' Exp 'in' Exp
                                             { Letrec $3 $6 $8 $10 }
-    | 'match' Exp 'with' '[' ']' '->' Exp '|' ident '::' ident '->' Exp
-                                            { Match $2 $7 $9 $11 $13 }
+    | 'match' Exp 'with' Clauses
+                                            { Match $2 $4 }
     | Exp2                                  { $1 }
 
 Exp2 :: { Exp }
@@ -93,6 +94,18 @@ Exp1 :: { Exp }
     | ident                                 { V $1 }
     | '[' ']'                               { Nil }
     | '(' Exp ')'                           { $2 }
+
+Pat :: { Pat }
+    : ident                                 { PVar $1 }
+    | '[' ']'                               { PNil }
+    | Pat '::' Pat                          { PCons $1 $3 }
+    | '_'                                   { PWild }
+    | '(' Pat ')'                           { $2 }
+
+Clauses :: { Clauses }
+    : Pat '->' Exp '|' Clauses       { Clauses $1 $3 $5 }
+    | Pat '->' Exp                   { Clause $1 $3 }
+
 {
 parseError :: [Token] -> a
 parseError ts = error $ "Parse error: " ++ show ts

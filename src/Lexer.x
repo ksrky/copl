@@ -31,6 +31,7 @@ $white+                     ;
 \-\>                        { \_ -> Tarrow }
 \:\:                        { \_ -> Tcoloncolon }
 \|                          { \_ -> Tpipe }
+\_                          { \_ -> Twild }
 if                          { \_ -> Tif }
 then                        { \_ -> Tthen }
 else                        { \_ -> Telse }
@@ -61,6 +62,7 @@ data Token
     | Tarrow
     | Tcoloncolon
     | Tpipe
+    | Twild
     | Tif
     | Tthen
     | Telse
