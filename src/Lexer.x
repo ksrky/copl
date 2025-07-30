@@ -31,6 +31,7 @@ $white+                     ;
 \-\>                        { \_ -> Tarrow }
 \:\:                        { \_ -> Tcoloncolon }
 \|                          { \_ -> Tpipe }
+\:                          { \_ -> Tcolon }
 if                          { \_ -> Tif }
 then                        { \_ -> Tthen }
 else                        { \_ -> Telse }
@@ -42,6 +43,9 @@ match                       { \_ -> Tmatch }
 with                        { \_ -> Twith }
 true                        { \_ -> Ttrue }
 false                       { \_ -> Tfalse }
+int                         { \_ -> Tint }
+bool                        { \_ -> Tbool }
+list                        { \_ -> Tlist }
 @ident                      { Ident }
 @int                        { Number . read }
 
@@ -61,6 +65,7 @@ data Token
     | Tarrow
     | Tcoloncolon
     | Tpipe
+    | Tcolon
     | Tif
     | Tthen
     | Telse
@@ -72,6 +77,9 @@ data Token
     | Twith
     | Ttrue
     | Tfalse
+    | Tint
+    | Tbool
+    | Tlist
     | Ident String
     | Number Int
     deriving (Eq, Show)

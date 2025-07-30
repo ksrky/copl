@@ -25,6 +25,7 @@ import Syntax
 '->'            { Tarrow }
 '::'            { Tcoloncolon }
 '|'             { Tpipe }
+':'             { Tcolon }
 'if'            { Tif }
 'then'          { Tthen }
 'else'          { Telse }
@@ -36,10 +37,14 @@ import Syntax
 'fun'           { Tfun }
 'match'         { Tmatch }
 'with'          { Twith }
+'int'           { Tint }
+'bool'          { Tbool }
+'list'          { Tlist }
 
 ident           { Ident $$ }
 num             { Number $$ }
 
+%right '->'
 %nonassoc '<'
 %right '::'
 %left '+' '-'
@@ -47,25 +52,23 @@ num             { Number $$ }
 
 %%
 
-Query :: { (Env, Exp) }
-    : Env '|-' Exp                          { ($1, $3) }
+Query :: { (Env, Exp, Typ) }
+    : Env '|-' Exp ':' Typ                  { ($1, $3, $5) }
 
 Env :: { Env }
     : {- empty -}                           { Empty }
     | Env1                                  { $1 }
 
 Env1 :: { Env }
-    : ident '=' Val                         { Snoc Empty $1 $3 }
-    | Env1 ',' ident '=' Val                { Snoc $1 $3 $5 }
+    : ident ':' Typ                         { Snoc Empty $1 $3 }
+    | Env1 ',' ident ':' Typ                { Snoc $1 $3 $5 }
 
-Val :: { Val }
-    : num                                   { VInt $1 }
-    | 'true'                                { VBool True }
-    | 'false'                               { VBool False }
-    | '(' Env ')' '[' 'fun' ident '=' Exp ']'
-                                            { VClos $2 $6 $8 }
-    | '(' Env ')' '[' 'rec' ident '=' 'fun' ident '=' Exp ']'
-                                            { VFix $2 $6 $9 $11 }
+Typ :: { Typ }
+    : 'int'                                  { TInt }
+    | 'bool'                                 { TBool }
+    | Typ '->' Typ                           { TFun $1 $3 }
+    | Typ 'list'                             { TList $1 }
+    | '(' Typ ')'                            { $2 }
 
 Exp :: { Exp }
     : Exp '+' Exp                           { Add $1 $3 }

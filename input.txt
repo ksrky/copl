@@ -1,4 +1,1 @@
-|- let rec max = fun l -> match l with 
-       x :: [] -> x 
-     | x :: y :: z -> if x < y then max (y :: z) else max (x :: z) in
-   max (9 :: 2 :: 3 :: [])
+|- fun x -> x : 'a -> 'a

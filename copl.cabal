@@ -25,10 +25,10 @@ source-repository head
 
 library
   exposed-modules:
-      EvalNatExp
       Lexer
       Parser
       Syntax
+      Typing
   other-modules:
       Paths_copl
   autogen-modules:
