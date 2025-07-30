@@ -29,6 +29,8 @@ $white+                     ;
 \,                          { \_ -> Tcomma }
 \|\-                        { \_ -> Tvdash}
 \-\>                        { \_ -> Tarrow }
+\:\:                        { \_ -> Tcoloncolon }
+\|                          { \_ -> Tpipe }
 if                          { \_ -> Tif }
 then                        { \_ -> Tthen }
 else                        { \_ -> Telse }
@@ -36,6 +38,8 @@ let                         { \_ -> Tlet }
 in                          { \_ -> Tin }
 rec                         { \_ -> Trec }
 fun                         { \_ -> Tfun }
+match                       { \_ -> Tmatch }
+with                        { \_ -> Twith }
 true                        { \_ -> Ttrue }
 false                       { \_ -> Tfalse }
 @ident                      { Ident }
@@ -55,6 +59,8 @@ data Token
     | Tcomma
     | Tvdash
     | Tarrow
+    | Tcoloncolon
+    | Tpipe
     | Tif
     | Tthen
     | Telse
@@ -62,6 +68,8 @@ data Token
     | Tin
     | Trec
     | Tfun
+    | Tmatch
+    | Twith
     | Ttrue
     | Tfalse
     | Ident String

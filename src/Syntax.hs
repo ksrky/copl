@@ -5,6 +5,8 @@ data Val
     | VBool Bool
     | VClos Env String Exp
     | VFix Env String String Exp
+    | VNil
+    | VCons Val Val
     deriving (Eq)
 
 data Exp
@@ -20,6 +22,9 @@ data Exp
     | Fun String Exp
     | App Exp Exp
     | Letrec String String Exp Exp
+    | Nil
+    | Cons Exp Exp
+    | Match Exp Exp String String Exp
     deriving (Eq)
 
 data Env
@@ -42,6 +47,8 @@ instance Show Val where
     show (VBool b) = showBool b
     show (VClos env x e) = "(" ++ show env ++ ")[fun " ++ x ++ " -> " ++ show e ++ "]"
     show (VFix env f x e) = "(" ++ show env ++ ")[rec " ++ f ++ " = fun " ++ x ++ " -> " ++ show e ++ "]"
+    show VNil = "[]"
+    show (VCons v1 v2) = "(" ++ show v1 ++ " :: " ++ show v2 ++ ")"
 
 instance Show Exp where
     show (I n) = show n
@@ -56,6 +63,9 @@ instance Show Exp where
     show (Fun x e) = "(fun " ++ x ++ " -> " ++ show e ++ ")"
     show (App e1 e2) = "(" ++ show e1 ++ " " ++ show e2 ++ ")"
     show (Letrec f x e1 e2) = "let rec " ++ f ++ " = fun " ++ x ++ " -> " ++ show e1 ++ " in " ++ show e2
+    show Nil = "[]"
+    show (Cons e1 e2) = "(" ++ show e1 ++ " :: " ++ show e2 ++ ")"
+    show (Match e1 e2 x y e3) = "(match " ++ show e1 ++ " with [] -> " ++ show e2 ++ " | " ++ x ++ " :: " ++ y ++ " -> " ++ show e3 ++ ")"
 
 instance Show Env where
     show Empty            = ""

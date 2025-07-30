@@ -1,3 +1,4 @@
-|- let fact = fun self -> fun n ->
-     if n < 2 then 1 else n * self self (n - 1) in
-   fact fact 3
+|- let rec max = fun l -> match l with 
+       x :: [] -> x 
+     | x :: y :: z -> if x < y then max (y :: z) else max (x :: z) in
+   max (9 :: 2 :: 3 :: [])

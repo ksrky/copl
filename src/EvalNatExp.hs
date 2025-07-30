@@ -38,14 +38,17 @@ deriveTimes i1 i2 = Derivation (Times i1 i2 (i1 * i2)) "B-Times" []
 deriveLess :: Int -> Int -> Derivation
 deriveLess i1 i2 = Derivation (Lt i1 i2 (i1 < i2)) "B-Lt" []
 
+find :: Env -> String -> Maybe Val
+find Empty _ = Nothing
+find (Snoc env x v) y
+    | x == y = Just v
+    | otherwise = find env y
+
 deriveEvalTo :: Env -> Exp -> Maybe Derivation
 deriveEvalTo env (I i) = pure $ Derivation (EvalTo env (I i) (VInt i)) "E-Int" []
 deriveEvalTo env (B b) = pure $ Derivation (EvalTo env (B b) (VBool b)) "E-Bool" []
-deriveEvalTo (Snoc env y v) (V x)
-    | x == y = pure $ Derivation (EvalTo (Snoc env y v) (V x) v) "E-Var1" []
-    | Just p <- deriveEvalTo env (V x)
-    , (EvalTo _ _ v') <- conclusion p
-    = pure $ Derivation (EvalTo (Snoc env y v) (V x) v') "E-Var2" [p]
+deriveEvalTo env (V x)
+    | Just v <- find env x = pure $ Derivation (EvalTo env (V x) v) "E-Var" []
 deriveEvalTo env (Add e1 e2)
     | Just p1 <- deriveEvalTo env e1
     , (EvalTo _ _ (VInt i1)) <- conclusion p1
@@ -121,6 +124,25 @@ deriveEvalTo env (Letrec f x e1 e2)
     , Just p2 <- deriveEvalTo env' e2
     , (EvalTo _ _ v2) <- conclusion p2
     = Just $ Derivation (EvalTo env (Letrec f x e1 e2) v2) "E-LetRec" [p2]
+deriveEvalTo env Nil = Just $ Derivation (EvalTo env Nil VNil) "E-Nil" []
+deriveEvalTo env (Cons e1 e2)
+    | Just p1 <- deriveEvalTo env e1
+    , (EvalTo _ _ v1) <- conclusion p1
+    , Just p2 <- deriveEvalTo env e2
+    , (EvalTo _ _ v2) <- conclusion p2
+    = Just $ Derivation (EvalTo env (Cons e1 e2) (VCons v1 v2)) "E-Cons" [p1, p2]
+deriveEvalTo env (Match e1 e2 x y e3)
+    | Just p1 <- deriveEvalTo env e1
+    , (EvalTo _ _ VNil) <- conclusion p1
+    , Just p2 <- deriveEvalTo env e2
+    , (EvalTo _ _ v2) <- conclusion p2
+    = Just $ Derivation (EvalTo env (Match e1 e2 x y e3) v2) "E-MatchNil" [p1, p2]
+    | Just p1 <- deriveEvalTo env e1
+    , (EvalTo _ _ (VCons v1 v2)) <- conclusion p1
+    , let env' = Snoc (Snoc env x v1) y v2
+    , Just p3 <- deriveEvalTo env' e3
+    , (EvalTo _ _ v3) <- conclusion p3
+    = Just $ Derivation (EvalTo env (Match e1 e2 x y e3) v3) "E-MatchCons" [p1, p3]
 deriveEvalTo _ _ = Nothing
 
 main :: IO ()

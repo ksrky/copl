@@ -23,6 +23,8 @@ import Syntax
 ','             { Tcomma }
 '|-'            { Tvdash }
 '->'            { Tarrow }
+'::'            { Tcoloncolon }
+'|'             { Tpipe }
 'if'            { Tif }
 'then'          { Tthen }
 'else'          { Telse }
@@ -32,11 +34,14 @@ import Syntax
 'in'            { Tin }
 'rec'           { Trec }
 'fun'           { Tfun }
+'match'         { Tmatch }
+'with'          { Twith }
 
 ident           { Ident $$ }
 num             { Number $$ }
 
 %nonassoc '<'
+%right '::'
 %left '+' '-'
 %left '*'
 
@@ -67,11 +72,14 @@ Exp :: { Exp }
     | Exp '-' Exp                           { Sub $1 $3 }
     | Exp '*' Exp                           { Mul $1 $3 }
     | Exp '<' Exp                           { Less $1 $3 }
+    | Exp '::' Exp                          { Cons $1 $3 }
     | 'if' Exp 'then' Exp 'else' Exp        { Ite $2 $4 $6 }
     | 'let' ident '=' Exp 'in' Exp          { Let $2 $4 $6 }
     | 'fun' ident '->' Exp                  { Fun $2 $4 }
     | 'let' 'rec' ident '=' 'fun' ident '->' Exp 'in' Exp
                                             { Letrec $3 $6 $8 $10 }
+    | 'match' Exp 'with' '[' ']' '->' Exp '|' ident '::' ident '->' Exp
+                                            { Match $2 $7 $9 $11 $13 }
     | Exp2                                  { $1 }
 
 Exp2 :: { Exp }
@@ -83,6 +91,7 @@ Exp1 :: { Exp }
     | 'true'                                { B True }
     | 'false'                               { B False }
     | ident                                 { V $1 }
+    | '[' ']'                               { Nil }
     | '(' Exp ')'                           { $2 }
 {
 parseError :: [Token] -> a
