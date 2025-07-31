@@ -1,6 +1,6 @@
 module Main (main) where
 
-import qualified EvalNatExp
+import qualified Eval
 
 main :: IO ()
-main = EvalNatExp.main
+main = Eval.main
