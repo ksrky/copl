@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
-module EvalNatExp where
+module Eval where
 
 import           Data.List (intercalate)
 
