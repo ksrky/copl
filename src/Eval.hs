@@ -1,4 +1,4 @@
-module EvalNatExp where
+module Eval where
 
 import           Data.List (intercalate)
 
