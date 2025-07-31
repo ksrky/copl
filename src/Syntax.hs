@@ -8,11 +8,17 @@ import           System.IO.Unsafe (unsafePerformIO)
 tyVarCounter :: IORef Int
 tyVarCounter = unsafePerformIO (newIORef 0)
 
+resetTyVarCounter :: IO ()
+resetTyVarCounter = writeIORef tyVarCounter 0
+
 freshTyVarName :: IO TyVarName
 freshTyVarName = do
     n <- readIORef tyVarCounter
     writeIORef tyVarCounter (n + 1)
-    return $ "a" ++ show n
+    return $ alphabet n
+  where
+    alphabet :: Int -> String
+    alphabet i = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"] !! (i `mod` 26)
 
 data Exp
     = I Int
@@ -173,7 +179,7 @@ instance Show Typ where
     show TInt           = "int"
     show (TFun ty1 ty2) = "(" ++ show ty1 ++ " -> " ++ show ty2 ++ ")"
     show (TList ty)     = show ty ++ " list"
-    show (TVar _)       = "?"  -- Simplified for now
+    show (TVar _)       = "?"  -- Use alpha for unresolved type variables
     show (TNamed name)  = "'" ++ name
 
 instance Show TypeScheme where
@@ -245,31 +251,96 @@ freeVarsInType ty = do
     freeVarsInType' ty'
   where
     freeVarsInType' (TNamed name) = return [name]
+    freeVarsInType' (TVar _) = do
+        -- For unresolved type variables, create a name based on the reference
+        name <- freshTyVarName
+        return [name]
     freeVarsInType' (TFun t1 t2) = do
         fv1 <- freeVarsInType t1
         fv2 <- freeVarsInType t2
-        return $ fv1 ++ fv2
+        return $ nub (fv1 ++ fv2)
     freeVarsInType' (TList t) = freeVarsInType t
     freeVarsInType' _ = return []
 
 -- Free type variables in an environment
 freeVarsInEnv :: Env -> IO [TyVarName]
 freeVarsInEnv Empty = return []
-freeVarsInEnv (Snoc env _ (Forall _ ty)) = do
+freeVarsInEnv (Snoc env _ (Forall bound ty)) = do
     envFV <- freeVarsInEnv env
     tyFV <- freeVarsInType ty
-    return $ envFV ++ tyFV
+    -- Remove bound variables from the free variables
+    let freeTyFV = filter (`notElem` bound) tyFV
+    return $ nub (envFV ++ freeTyFV)
+
+-- Type variables collection and normalization
+collectTyVars :: Typ -> IO [TyRef]
+collectTyVars ty = do
+    ty' <- deref ty
+    collectTyVars' ty'
+  where
+    collectTyVars' (TVar ref) = return [ref]
+    collectTyVars' (TFun t1 t2) = do
+        vars1 <- collectTyVars t1
+        vars2 <- collectTyVars t2
+        return $ nub (vars1 ++ vars2)
+    collectTyVars' (TList t) = collectTyVars t
+    collectTyVars' _ = return []
+
+-- Create a mapping from type variable references to names
+createVarMapping :: [TyRef] -> IO [(TyRef, TyVarName)]
+createVarMapping refs = mapM (\ref -> do
+    name <- freshTyVarName
+    return (ref, name)) refs
+
+-- Apply variable mapping to a type
+applyVarMapping :: [(TyRef, TyVarName)] -> Typ -> IO Typ
+applyVarMapping mapping ty = do
+    ty' <- deref ty
+    applyVarMapping' mapping ty'
+  where
+    applyVarMapping' m (TVar ref) =
+        case lookup ref m of
+            Just name -> return $ TNamed name
+            Nothing   -> return $ TVar ref
+    applyVarMapping' m (TFun t1 t2) = do
+        t1' <- applyVarMapping m t1
+        t2' <- applyVarMapping m t2
+        return $ TFun t1' t2'
+    applyVarMapping' m (TList t) = do
+        t' <- applyVarMapping m t
+        return $ TList t'
+    applyVarMapping' _ t = return t
+
+-- Normalize type variables for display with consistent naming
+normalizeTyVarsConsistent :: Typ -> IO Typ
+normalizeTyVarsConsistent ty = do
+    vars <- collectTyVars ty
+    mapping <- createVarMapping vars
+    applyVarMapping mapping ty
 
 -- Generalize a type to a type scheme
 generalize :: Env -> Typ -> IO TypeScheme
 generalize env ty = do
+    ty' <- instantiate ty
+    -- Normalize the type to have consistent variable names
+    normalizedTy <- normalizeTyVarsConsistent ty'
+    -- Get all type variable names in the normalized type
+    let tyVars = extractTyVarNames normalizedTy
+    -- Get free variables in the environment
     envFV <- freeVarsInEnv env
-    tyFV <- freeVarsInType ty
-    let quantVars = filter (`notElem` envFV) tyFV
-    return $ Forall quantVars ty
+    -- Only generalize variables that are not free in the environment
+    let generalizeVars = filter (`notElem` envFV) tyVars
+    return $ Forall generalizeVars normalizedTy
+  where
+    extractTyVarNames :: Typ -> [TyVarName]
+    extractTyVarNames (TNamed name) = [name]
+    extractTyVarNames (TFun t1 t2) = nub (extractTyVarNames t1 ++ extractTyVarNames t2)
+    extractTyVarNames (TList t1) = extractTyVarNames t1
+    extractTyVarNames _ = []
 
 -- Instantiate a type scheme to a type
 instantiateScheme :: TypeScheme -> IO Typ
+instantiateScheme (Forall [] ty) = return ty  -- For monomorphic types, return as-is
 instantiateScheme (Forall vars ty) = do
     freshVars <- mapM (\_ -> newTVar) vars
     let subst = zip vars freshVars
@@ -296,19 +367,4 @@ nub (x:xs) = x : nub (filter (/= x) xs)
 
 -- Normalize type variables for display
 normalizeTyVars :: Typ -> IO Typ
-normalizeTyVars ty = do
-    ty' <- instantiate ty
-    normalizeTyVars' ty'
-  where
-    normalizeTyVars' (TVar _) = do
-        -- Replace unresolved TVar with a named variable
-        name <- freshTyVarName
-        return $ TNamed name
-    normalizeTyVars' (TFun t1 t2) = do
-        t1' <- normalizeTyVars' t1
-        t2' <- normalizeTyVars' t2
-        return $ TFun t1' t2'
-    normalizeTyVars' (TList t) = do
-        t' <- normalizeTyVars' t
-        return $ TList t'
-    normalizeTyVars' t = return t
+normalizeTyVars = normalizeTyVarsConsistent

@@ -1,6 +1,7 @@
 module Typing where
 
-import           Data.List (intercalate)
+import           Data.List (intercalate, groupBy, sortBy, partition)
+import           System.IO.Unsafe (unsafePerformIO)
 import           Lexer
 import           Parser
 import           Syntax
@@ -61,8 +62,9 @@ deriveCheck env (V x) expectedTy =
             if success
                 then do
                     -- Resolve the type after unification
-                    resolvedTy <- instantiate varTy
-                    return $ Just $ Derivation (Check env (V x) resolvedTy) "T-Var" []
+                    resolvedTy <- instantiate expectedTy
+                    normalizedTy <- normalizeTyVars resolvedTy
+                    return $ Just $ Derivation (Check env (V x) normalizedTy) "T-Var" []
                 else return Nothing
 
 deriveCheck env (Add e1 e2) expectedTy = do
@@ -133,7 +135,28 @@ deriveCheck env (Ite e1 e2 e3) expectedTy = do
                     p3 <- deriveCheck env e3 expectedTy
                     case p3 of
                         Nothing -> return Nothing
-                        Just d3 -> return $ Just $ Derivation (Check env (Ite e1 e2 e3) expectedTy) "T-If" [d1, d2, d3]
+                        Just d3 -> do
+                            -- Normalize types for consistent display
+                            finalExpectedTy <- instantiate expectedTy
+                            normalizedExpectedTy <- normalizeTyVars finalExpectedTy
+
+                            -- Update premises with resolved types
+                            let Check _ _ condTy = conclusion d1
+                            resolvedCondTy <- instantiate condTy
+                            normalizedCondTy <- normalizeTyVars resolvedCondTy
+                            let normalizedD1 = d1{conclusion = Check env e1 normalizedCondTy}
+
+                            let Check _ _ thenTy = conclusion d2
+                            resolvedThenTy <- instantiate thenTy
+                            normalizedThenTy <- normalizeTyVars resolvedThenTy
+                            let normalizedD2 = d2{conclusion = Check env e2 normalizedThenTy}
+
+                            let Check _ _ elseTy = conclusion d3
+                            resolvedElseTy <- instantiate elseTy
+                            normalizedElseTy <- normalizeTyVars resolvedElseTy
+                            let normalizedD3 = d3{conclusion = Check env e3 normalizedElseTy}
+
+                            return $ Just $ Derivation (Check env (Ite e1 e2 e3) normalizedExpectedTy) "T-If" [normalizedD1, normalizedD2, normalizedD3]
 
 deriveCheck env (Let x e1 e2) expectedTy = do
     tv <- newTVar
@@ -142,13 +165,20 @@ deriveCheck env (Let x e1 e2) expectedTy = do
         Nothing -> return Nothing
         Just d1 -> do
             let Check _ _ ty1 = conclusion d1
+            -- Get the actual inferred type after unification
             inferredTy1 <- instantiate ty1
+            -- Generalize the type with respect to the current environment
             generalizedTy1 <- generalize env inferredTy1
             let env' = Snoc env x generalizedTy1
             p2 <- deriveCheck env' e2 expectedTy
             case p2 of
                 Nothing -> return Nothing
-                Just d2 -> return $ Just $ Derivation (Check env (Let x e1 e2) expectedTy) "T-Let" [d1, d2]
+                Just d2 -> do
+                    -- Normalize types in the final derivation for display
+                    finalTy1 <- instantiate ty1
+                    normalizedTy1 <- normalizeTyVars finalTy1
+                    let normalizedD1 = d1{conclusion = Check env e1 normalizedTy1}
+                    return $ Just $ Derivation (Check env (Let x e1 e2) expectedTy) "T-Let" [normalizedD1, d2]
 
 deriveCheck env (Fun x e) expectedTy = do
     argTy <- newTVar
@@ -158,18 +188,24 @@ deriveCheck env (Fun x e) expectedTy = do
     if not success
         then return Nothing
         else do
-            -- Create a type scheme for the argument
-            resolvedArgTy <- instantiate argTy
-            let argScheme = Forall [] resolvedArgTy
+            -- Keep the type variable for the argument (no early resolution)
+            let argScheme = Forall [] argTy
             let env' = Snoc env x argScheme
             p <- deriveCheck env' e retTy
             case p of
                 Nothing -> return Nothing
                 Just d -> do
+                    -- Get the final resolved types after all unifications
                     finalArgTy <- instantiate argTy
                     finalRetTy <- instantiate retTy
                     let finalFunTy = TFun finalArgTy finalRetTy
-                    return $ Just $ Derivation (Check env (Fun x e) finalFunTy) "T-Abs" [d]
+                    normalizedFunTy <- normalizeTyVars finalFunTy
+                    -- Also normalize the premise with resolved argument type
+                    let Check _ _ retTyFromPremise = conclusion d
+                    resolvedRetTy <- instantiate retTyFromPremise
+                    normalizedRetTy <- normalizeTyVars resolvedRetTy
+                    let normalizedD = d{conclusion = Check env' e normalizedRetTy}
+                    return $ Just $ Derivation (Check env (Fun x e) normalizedFunTy) "T-Abs" [normalizedD]
 
 deriveCheck env (App e1 e2) expectedTy = do
     argTy <- newTVar
@@ -178,10 +214,28 @@ deriveCheck env (App e1 e2) expectedTy = do
     case p1 of
         Nothing -> return Nothing
         Just d1 -> do
-            p2 <- deriveCheck env e2 argTy
+            -- Get the resolved argument type after e1's type checking
+            resolvedArgTy <- instantiate argTy
+            p2 <- deriveCheck env e2 resolvedArgTy
             case p2 of
                 Nothing -> return Nothing
-                Just d2 -> return $ Just $ Derivation (Check env (App e1 e2) expectedTy) "T-App" [d1, d2]
+                Just d2 -> do
+                    -- Get final resolved types for display
+                    finalExpectedTy <- instantiate expectedTy
+                    -- Normalize types for consistent display
+                    normalizedExpectedTy <- normalizeTyVars finalExpectedTy
+                    -- Update premises with resolved types
+                    let Check _ _ funTyFromPremise = conclusion d1
+                    resolvedFunTy <- instantiate funTyFromPremise
+                    normalizedFunTy <- normalizeTyVars resolvedFunTy
+                    let normalizedD1 = d1{conclusion = Check env e1 normalizedFunTy}
+
+                    let Check _ _ argTyFromPremise = conclusion d2
+                    resolvedArgTyFromPremise <- instantiate argTyFromPremise
+                    normalizedArgTyFromPremise <- normalizeTyVars resolvedArgTyFromPremise
+                    let normalizedD2 = d2{conclusion = Check env e2 normalizedArgTyFromPremise}
+
+                    return $ Just $ Derivation (Check env (App e1 e2) normalizedExpectedTy) "T-App" [normalizedD1, normalizedD2]
 
 deriveCheck env Nil expectedTy = do
     elemTy <- newTVar
@@ -251,9 +305,104 @@ main :: IO ()
 main = do
     s <- getContents
     let (env, e, ty) = parse (alexScanTokens s)
+    resetTyVarCounter  -- Reset counter for consistent naming
+    putStrLn $ "Parsed environment: " ++ show env
+    putStrLn $ "Parsed expression: " ++ show e
+    putStrLn $ "Expected type: " ++ show ty
     derivationTree <- deriveCheck env e ty
     case derivationTree of
         Nothing -> putStrLn "No valid derivation found."
         Just d  -> do
             finalD <- instantiate d
-            print finalD
+            resetTyVarCounter  -- Reset for consistent display naming
+            normalizedD <- normalizeDerivationGlobally finalD
+            print normalizedD
+
+-- Normalize all types in a derivation tree globally for consistent naming
+normalizeDerivationGlobally :: Derivation -> IO Derivation
+normalizeDerivationGlobally d = do
+    -- Collect all type references in the derivation tree
+    tyRefs <- collectAllTyRefs d
+    -- Create a mapping that considers unification chains
+    mapping <- createUnificationAwareMapping tyRefs
+    -- Apply the mapping to the entire tree
+    applyMappingToDerivation mapping d
+  where
+    collectAllTyRefs :: Derivation -> IO [TyRef]
+    collectAllTyRefs (Derivation (Check env _ ty) _ subPremises) = do
+        tyRefs <- collectTyVars ty
+        envRefs <- collectEnvTyRefs env
+        premiseRefs <- concat <$> mapM collectAllTyRefs subPremises
+        return $ nub (tyRefs ++ envRefs ++ premiseRefs)
+
+    collectEnvTyRefs :: Env -> IO [TyRef]
+    collectEnvTyRefs Empty = return []
+    collectEnvTyRefs (Snoc env _ (Forall _ ty)) = do
+        envRefs <- collectEnvTyRefs env
+        tyRefs <- collectTyVars ty
+        return $ nub (envRefs ++ tyRefs)
+
+    -- Create a mapping that considers unification chains
+    createUnificationAwareMapping :: [TyRef] -> IO [(TyRef, TyVarName)]
+    createUnificationAwareMapping refs = do
+        -- Create equivalence groups based on final references
+        groups <- groupByEquivalence refs
+        -- Assign names to each group
+        assignments <- mapM assignNameToGroup groups
+        return $ concat assignments
+      where
+        groupByEquivalence :: [TyRef] -> IO [[TyRef]]
+        groupByEquivalence allRefs = do
+            -- Build equivalence relation
+            pairs <- mapM (\ref -> do
+                final <- findFinalRef ref
+                return (ref, final)) allRefs
+            -- Group refs with same final reference
+            return $ groupEquivalent pairs []
+
+        groupEquivalent :: [(TyRef, TyRef)] -> [[TyRef]] -> [[TyRef]]
+        groupEquivalent [] groups = groups
+        groupEquivalent ((ref, final):rest) groups =
+            let (sameGroup, otherGroups) = partition (hasSameFinal final) groups
+                newGroup = ref : concat sameGroup
+            in groupEquivalent rest (newGroup : otherGroups)
+
+        hasSameFinal :: TyRef -> [TyRef] -> Bool
+        hasSameFinal final group = case group of
+            [] -> False
+            (ref:_) -> unsafePerformIO $ do
+                refFinal <- findFinalRef ref
+                return $ refFinal == final
+
+        assignNameToGroup :: [TyRef] -> IO [(TyRef, TyVarName)]
+        assignNameToGroup group = do
+            name <- freshTyVarName
+            return $ map (\ref -> (ref, name)) group
+
+        findFinalRef :: TyRef -> IO TyRef
+        findFinalRef ref = do
+            mTy <- readTyRef ref
+            case mTy of
+                Nothing -> return ref
+                Just (TVar ref') -> findFinalRef ref'
+                Just _ -> return ref
+
+    applyMappingToDerivation :: [(TyRef, TyVarName)] -> Derivation -> IO Derivation
+    applyMappingToDerivation mapping (Derivation (Check env e ty) rule subPremises) = do
+        normalizedTy <- applyVarMapping mapping ty
+        normalizedEnv <- applyMappingToEnv mapping env
+        normalizedPremises <- mapM (applyMappingToDerivation mapping) subPremises
+        return $ Derivation (Check normalizedEnv e normalizedTy) rule normalizedPremises
+
+    applyMappingToEnv :: [(TyRef, TyVarName)] -> Env -> IO Env
+    applyMappingToEnv _ Empty = return Empty
+    applyMappingToEnv mapping (Snoc env x (Forall vars ty)) = do
+        normalizedEnv <- applyMappingToEnv mapping env
+        normalizedTy <- applyVarMapping mapping ty
+        return $ Snoc normalizedEnv x (Forall vars normalizedTy)-- Normalize all types in a derivation tree for better display
+normalizeDerivation :: Derivation -> IO Derivation
+normalizeDerivation d = do
+    let Check env e ty = conclusion d
+    normalizedTy <- normalizeTyVars ty
+    normalizedPremises <- mapM normalizeDerivation (premises d)
+    return $ d { conclusion = Check env e normalizedTy, premises = normalizedPremises }
