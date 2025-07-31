@@ -28,14 +28,14 @@ instance Show Derivation where
 instance Instantiate Derivation where
     instantiate d@Derivation{conclusion = Check env e ty} = do
         ty' <- instantiate ty
-        env' <- instantiate env
+        -- Don't instantiate the environment, keep original type schemes
         premises' <- mapM instantiate (premises d)
-        return $ d{conclusion = Check env' e ty', premises = premises'}
+        return $ d{conclusion = Check env e ty', premises = premises'}
 
-lookupEnv :: Env -> String -> Maybe Typ
+lookupEnv :: Env -> String -> Maybe TypeScheme
 lookupEnv Empty _ = Nothing
-lookupEnv (Snoc env x ty) y
-    | x == y   = Just ty
+lookupEnv (Snoc env x scheme) y
+    | x == y   = Just scheme
     | otherwise = lookupEnv env y
 
 -- Type checking with unification
@@ -55,10 +55,14 @@ deriveCheck env (B b) expectedTy = do
 deriveCheck env (V x) expectedTy =
     case lookupEnv env x of
         Nothing -> return Nothing
-        Just varTy -> do
+        Just varScheme -> do
+            varTy <- instantiateScheme varScheme
             success <- unify varTy expectedTy
             if success
-                then return $ Just $ Derivation (Check env (V x) varTy) "T-Var" []
+                then do
+                    -- Resolve the type after unification
+                    resolvedTy <- instantiate varTy
+                    return $ Just $ Derivation (Check env (V x) resolvedTy) "T-Var" []
                 else return Nothing
 
 deriveCheck env (Add e1 e2) expectedTy = do
@@ -139,7 +143,8 @@ deriveCheck env (Let x e1 e2) expectedTy = do
         Just d1 -> do
             let Check _ _ ty1 = conclusion d1
             inferredTy1 <- instantiate ty1
-            let env' = Snoc env x inferredTy1
+            generalizedTy1 <- generalize env inferredTy1
+            let env' = Snoc env x generalizedTy1
             p2 <- deriveCheck env' e2 expectedTy
             case p2 of
                 Nothing -> return Nothing
@@ -153,7 +158,10 @@ deriveCheck env (Fun x e) expectedTy = do
     if not success
         then return Nothing
         else do
-            let env' = Snoc env x argTy
+            -- Create a type scheme for the argument
+            resolvedArgTy <- instantiate argTy
+            let argScheme = Forall [] resolvedArgTy
+            let env' = Snoc env x argScheme
             p <- deriveCheck env' e retTy
             case p of
                 Nothing -> return Nothing
@@ -161,7 +169,7 @@ deriveCheck env (Fun x e) expectedTy = do
                     finalArgTy <- instantiate argTy
                     finalRetTy <- instantiate retTy
                     let finalFunTy = TFun finalArgTy finalRetTy
-                    return $ Just $ Derivation (Check env (Fun x e) finalFunTy) "T-Fun" [d]
+                    return $ Just $ Derivation (Check env (Fun x e) finalFunTy) "T-Abs" [d]
 
 deriveCheck env (App e1 e2) expectedTy = do
     argTy <- newTVar
@@ -210,7 +218,11 @@ deriveCheck env (Match e1 e2 x y e3) expectedTy = do
             case p2 of
                 Nothing -> return Nothing
                 Just d2 -> do
-                    let env' = Snoc (Snoc env x elemTy) y listTy
+                    resolvedElemTy <- instantiate elemTy
+                    resolvedListTy <- instantiate listTy
+                    let elemScheme = Forall [] resolvedElemTy
+                    let listScheme = Forall [] resolvedListTy
+                    let env' = Snoc (Snoc env x elemScheme) y listScheme
                     p3 <- deriveCheck env' e3 expectedTy
                     case p3 of
                         Nothing -> return Nothing
@@ -220,13 +232,16 @@ deriveCheck env (Letrec f x e1 e2) expectedTy = do
     argTy <- newTVar
     retTy <- newTVar
     let funTy = TFun argTy retTy
-    let env1 = Snoc (Snoc env f funTy) x argTy
+    let funScheme = Forall [] funTy
+    let argScheme = Forall [] argTy
+    let env1 = Snoc (Snoc env f funScheme) x argScheme
     p1 <- deriveCheck env1 e1 retTy
     case p1 of
         Nothing -> return Nothing
         Just d1 -> do
-            inferredFunTy <- instantiate funTy
-            let env2 = Snoc env f inferredFunTy
+            resolvedFunTy <- instantiate funTy
+            generalizedFunTy <- generalize env resolvedFunTy
+            let env2 = Snoc env f generalizedFunTy
             p2 <- deriveCheck env2 e2 expectedTy
             case p2 of
                 Nothing -> return Nothing

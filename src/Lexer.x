@@ -27,11 +27,13 @@ $white+                     ;
 \[                          { \_ -> Tlbracket }
 \]                          { \_ -> Trbracket }
 \,                          { \_ -> Tcomma }
+\.                          { \_ -> Tdot }
 \|\-                        { \_ -> Tvdash}
 \-\>                        { \_ -> Tarrow }
 \:\:                        { \_ -> Tcoloncolon }
 \|                          { \_ -> Tpipe }
 \:                          { \_ -> Tcolon }
+\'                          { \_ -> Tapost }
 if                          { \_ -> Tif }
 then                        { \_ -> Tthen }
 else                        { \_ -> Telse }
@@ -61,11 +63,13 @@ data Token
     | Tlbracket
     | Trbracket
     | Tcomma
+    | Tdot
     | Tvdash
     | Tarrow
     | Tcoloncolon
     | Tpipe
     | Tcolon
+    | Tapost
     | Tif
     | Tthen
     | Telse

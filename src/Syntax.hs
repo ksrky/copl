@@ -1,6 +1,18 @@
 module Syntax where
 
 import           Data.IORef
+import           System.IO.Unsafe (unsafePerformIO)
+
+-- Global counter for generating fresh type variable names
+{-# NOINLINE tyVarCounter #-}
+tyVarCounter :: IORef Int
+tyVarCounter = unsafePerformIO (newIORef 0)
+
+freshTyVarName :: IO TyVarName
+freshTyVarName = do
+    n <- readIORef tyVarCounter
+    writeIORef tyVarCounter (n + 1)
+    return $ "a" ++ show n
 
 data Exp
     = I Int
@@ -21,6 +33,11 @@ data Exp
     deriving (Eq)
 
 type TyRef = IORef (Maybe Typ)
+type TyVarName = String
+
+-- Type scheme: forall α₁...αₙ. τ
+data TypeScheme = Forall [TyVarName] Typ
+    deriving (Eq)
 
 newTyRef :: IO TyRef
 newTyRef = newIORef Nothing
@@ -40,6 +57,7 @@ data Typ
     | TFun Typ Typ
     | TList Typ
     | TVar TyRef
+    | TNamed TyVarName  -- Named type variable for schemes
 
 instance Eq Typ where
     TBool == TBool               = True
@@ -47,11 +65,12 @@ instance Eq Typ where
     (TFun t1 t2) == (TFun t3 t4) = t1 == t3 && t2 == t4
     (TList t1) == (TList t2)     = t1 == t2
     (TVar r1) == (TVar r2)       = r1 == r2
+    (TNamed n1) == (TNamed n2)   = n1 == n2
     _ == _                       = False
 
 data Env
     = Empty
-    | Snoc Env String Typ
+    | Snoc Env String TypeScheme
 
 instance Eq Env where
     Empty == Empty = True
@@ -73,6 +92,12 @@ unify t1 t2 = do
         | otherwise = do
             writeTyRef ref1 (TVar ref2)
             return True
+    unify' (TVar ref) (TNamed name) = do
+        writeTyRef ref (TNamed name)
+        return True
+    unify' (TNamed name) (TVar ref) = do
+        writeTyRef ref (TNamed name)
+        return True
     unify' (TVar ref) ty = do
         occurs <- occursCheck ref ty
         if occurs
@@ -89,6 +114,7 @@ unify t1 t2 = do
                 return True
     unify' TBool TBool = return True
     unify' TInt TInt = return True
+    unify' (TNamed n1) (TNamed n2) = return (n1 == n2)
     unify' (TFun ta1 ta2) (TFun tb1 tb2) = do
         b1 <- unify ta1 tb1
         if b1
@@ -147,7 +173,12 @@ instance Show Typ where
     show TInt           = "int"
     show (TFun ty1 ty2) = "(" ++ show ty1 ++ " -> " ++ show ty2 ++ ")"
     show (TList ty)     = show ty ++ " list"
-    show (TVar _)       = "?"
+    show (TVar _)       = "?"  -- Simplified for now
+    show (TNamed name)  = "'" ++ name
+
+instance Show TypeScheme where
+    show (Forall [] ty)   = show ty
+    show (Forall vars ty) = unwords (map ("'"++) vars) ++ ". " ++ show ty
 
 instance Show Env where
     show Empty             = ""
@@ -172,15 +203,112 @@ instance Instantiate Typ where
         instantiate' (TList innerTy) = TList <$> instantiate innerTy
         instantiate' otherTy = return otherTy
 
+instance Instantiate TypeScheme where
+    instantiate (Forall vars ty) = do
+        -- Create fresh type variables for each quantified variable
+        freshVars <- mapM (\_ -> newTVar) vars
+        let subst = zip vars freshVars
+        ty' <- substituteInType subst ty
+        return $ Forall [] ty'
+      where
+        substituteInType :: [(TyVarName, Typ)] -> Typ -> IO Typ
+        substituteInType subst (TNamed name) =
+            case lookup name subst of
+                Just newTy -> return newTy
+                Nothing    -> return (TNamed name)
+        substituteInType subst (TFun t1 t2) = do
+            t1' <- substituteInType subst t1
+            t2' <- substituteInType subst t2
+            return $ TFun t1' t2'
+        substituteInType subst (TList t) = do
+            t' <- substituteInType subst t
+            return $ TList t'
+        substituteInType _ t = return t
+
 instance Instantiate Env where
     instantiate Empty = return Empty
-    instantiate (Snoc env x ty) = do
-        ty' <- instantiate ty
+    instantiate (Snoc env x scheme) = do
+        scheme' <- instantiate scheme
         env' <- instantiate env
-        return $ Snoc env' x ty'
+        return $ Snoc env' x scheme'
 
 instance Instantiate Judgement where
     instantiate (Check env e ty) = do
         env' <- instantiate env
         ty' <- instantiate ty
         return $ Check env' e ty'
+
+-- Free type variables in a type
+freeVarsInType :: Typ -> IO [TyVarName]
+freeVarsInType ty = do
+    ty' <- deref ty
+    freeVarsInType' ty'
+  where
+    freeVarsInType' (TNamed name) = return [name]
+    freeVarsInType' (TFun t1 t2) = do
+        fv1 <- freeVarsInType t1
+        fv2 <- freeVarsInType t2
+        return $ fv1 ++ fv2
+    freeVarsInType' (TList t) = freeVarsInType t
+    freeVarsInType' _ = return []
+
+-- Free type variables in an environment
+freeVarsInEnv :: Env -> IO [TyVarName]
+freeVarsInEnv Empty = return []
+freeVarsInEnv (Snoc env _ (Forall _ ty)) = do
+    envFV <- freeVarsInEnv env
+    tyFV <- freeVarsInType ty
+    return $ envFV ++ tyFV
+
+-- Generalize a type to a type scheme
+generalize :: Env -> Typ -> IO TypeScheme
+generalize env ty = do
+    envFV <- freeVarsInEnv env
+    tyFV <- freeVarsInType ty
+    let quantVars = filter (`notElem` envFV) tyFV
+    return $ Forall quantVars ty
+
+-- Instantiate a type scheme to a type
+instantiateScheme :: TypeScheme -> IO Typ
+instantiateScheme (Forall vars ty) = do
+    freshVars <- mapM (\_ -> newTVar) vars
+    let subst = zip vars freshVars
+    substituteInType subst ty
+  where
+    substituteInType :: [(TyVarName, Typ)] -> Typ -> IO Typ
+    substituteInType subst (TNamed name) =
+        case lookup name subst of
+            Just newTy -> return newTy
+            Nothing    -> return (TNamed name)
+    substituteInType subst (TFun t1 t2) = do
+        t1' <- substituteInType subst t1
+        t2' <- substituteInType subst t2
+        return $ TFun t1' t2'
+    substituteInType subst (TList t) = do
+        t' <- substituteInType subst t
+        return $ TList t'
+    substituteInType _ t = return t
+
+-- Helper function to remove duplicates from a list
+nub :: Eq a => [a] -> [a]
+nub []     = []
+nub (x:xs) = x : nub (filter (/= x) xs)
+
+-- Normalize type variables for display
+normalizeTyVars :: Typ -> IO Typ
+normalizeTyVars ty = do
+    ty' <- instantiate ty
+    normalizeTyVars' ty'
+  where
+    normalizeTyVars' (TVar _) = do
+        -- Replace unresolved TVar with a named variable
+        name <- freshTyVarName
+        return $ TNamed name
+    normalizeTyVars' (TFun t1 t2) = do
+        t1' <- normalizeTyVars' t1
+        t2' <- normalizeTyVars' t2
+        return $ TFun t1' t2'
+    normalizeTyVars' (TList t) = do
+        t' <- normalizeTyVars' t
+        return $ TList t'
+    normalizeTyVars' t = return t

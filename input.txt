@@ -1,1 +1,1 @@
-|- fun x -> x : 'a -> 'a
+|- let id = fun x -> x in id id : bool -> bool

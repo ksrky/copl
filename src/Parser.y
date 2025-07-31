@@ -21,11 +21,13 @@ import Syntax
 '['             { Tlbracket }
 ']'             { Trbracket }
 ','             { Tcomma }
+'.'             { Tdot }
 '|-'            { Tvdash }
 '->'            { Tarrow }
 '::'            { Tcoloncolon }
 '|'             { Tpipe }
 ':'             { Tcolon }
+'\''            { Tapost }
 'if'            { Tif }
 'then'          { Tthen }
 'else'          { Telse }
@@ -60,12 +62,21 @@ Env :: { Env }
     | Env1                                  { $1 }
 
 Env1 :: { Env }
-    : ident ':' Typ                         { Snoc Empty $1 $3 }
-    | Env1 ',' ident ':' Typ                { Snoc $1 $3 $5 }
+    : ident ':' TypeScheme                  { Snoc Empty $1 $3 }
+    | Env1 ',' ident ':' TypeScheme         { Snoc $1 $3 $5 }
+
+TypeScheme :: { TypeScheme }
+    : Typ                                   { Forall [] $1 }
+    | TypeVars '.' Typ                      { Forall $1 $3 }
+
+TypeVars :: { [String] }
+    : '\'' ident                            { [$2] }
+    | TypeVars '\'' ident                   { $1 ++ [$3] }
 
 Typ :: { Typ }
     : 'int'                                  { TInt }
     | 'bool'                                 { TBool }
+    | '\'' ident                             { TNamed $2 }
     | Typ '->' Typ                           { TFun $1 $3 }
     | Typ 'list'                             { TList $1 }
     | '(' Typ ')'                            { $2 }
