@@ -1,6 +1,6 @@
 module Main (main) where
 
-import qualified EvalNatExp
+import qualified Reduce
 
 main :: IO ()
-main = EvalNatExp.main
+main = Reduce.main

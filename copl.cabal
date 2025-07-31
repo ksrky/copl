@@ -25,9 +25,9 @@ source-repository head
 
 library
   exposed-modules:
-      EvalNatExp
       Lexer
       Parser
+      Reduce
       Syntax
   other-modules:
       Paths_copl
